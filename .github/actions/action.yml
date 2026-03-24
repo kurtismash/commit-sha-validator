@@ -1,0 +1,32 @@
+name: "Commit SHA Validator"
+description: "Validates that third-party GitHub Actions pinned to commit SHAs are owned by their claimed repositories."
+inputs:
+  token:
+    description: "GitHub token with permission to comment on PRs and clone repositories."
+    required: true
+    default: ${{ github.token }}
+  workflow-directory:
+    description: "Directory containing GitHub Actions workflow files to scan."
+    required: false
+    default: ".github/workflows"
+  extra-actions-directories:
+    description: "Comma-separated list of additional directories containing action references (e.g., composite actions)."
+    required: false
+    default: ""
+  fail-on-error:
+    description: "Whether to fail the workflow if an invalid SHA is found."
+    required: false
+    default: "false"
+runs:
+  using: "composite"
+  steps:
+    - name: Validate commit SHAs
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        WORKFLOW_DIR: ${{ inputs.workflow-directory }}
+        EXTRA_DIRS: ${{ inputs.extra-actions-directories }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: bash "${{ github.action_path }}/validate-shas.sh"
