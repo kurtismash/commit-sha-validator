@@ -40,7 +40,7 @@ echo "Scanning ${#yaml_files[@]} YAML file(s) for third-party action references.
 # Also handles subpaths: owner/repo/path@<sha>
 SHA_PATTERN='uses:[[:space:]]+([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)(/[^@]*)?\@([0-9a-fA-F]{40})'
 
-declare -A seen_refs  # deduplicate owner/repo@sha
+declare -A seen_refs=()  # deduplicate owner/repo@sha
 invalid_refs=()
 
 for file in "${yaml_files[@]}"; do
@@ -51,12 +51,12 @@ for file in "${yaml_files[@]}"; do
       ref_key="${owner_repo}@${sha}"
 
       # Skip GitHub's own first-party actions
-      owner="${owner_repo%%/*}"
-      if [[ "$owner" == "actions" ]]; then
-        continue
-      fi
+    #   owner="${owner_repo%%/*}"
+    #   if [[ "$owner" == "actions" ]]; then
+    #     continue
+    #   fi
 
-      if [[ -n "${seen_refs[$ref_key]+_}" ]]; then
+      if [[ "${seen_refs[$ref_key]:-}" == "1" ]]; then
         continue
       fi
       seen_refs[$ref_key]=1
@@ -96,13 +96,11 @@ for ref_key in "${!seen_refs[@]}"; do
   fi
 
   # Check if any remote branch contains the commit
-  branches="$(git -C "$clone_dir" branch -r --contains "$sha" 2>/dev/null || true)"
-
-  if [[ -z "$branches" ]]; then
+  if git -C "$clone_dir" branch -r --contains "$sha" &>/dev/null; then
+    echo "  OK: SHA ${sha} is present in ${owner_repo}"
+  else
     echo "  INVALID: SHA ${sha} is NOT contained in any branch of ${owner_repo}"
     invalid_refs+=("${ref_key}")
-  else
-    echo "  OK: SHA ${sha} is present in ${owner_repo}"
   fi
 
   # Clean up clone immediately to save disk
