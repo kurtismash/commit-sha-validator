@@ -41,6 +41,7 @@ echo "Scanning ${#yaml_files[@]} YAML file(s) for third-party action references.
 SHA_PATTERN='uses:[[:space:]]+([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)(/[^@]*)?\@([0-9a-fA-F]{40})'
 
 declare -A seen_refs=()  # deduplicate owner/repo@sha
+declare -A repo_shas=()  # owner/repo -> space-separated list of SHAs
 invalid_refs=()
 
 for file in "${yaml_files[@]}"; do
@@ -50,16 +51,11 @@ for file in "${yaml_files[@]}"; do
       sha="${BASH_REMATCH[3]}"
       ref_key="${owner_repo}@${sha}"
 
-      # Skip GitHub's own first-party actions
-    #   owner="${owner_repo%%/*}"
-    #   if [[ "$owner" == "actions" ]]; then
-    #     continue
-    #   fi
-
       if [[ "${seen_refs[$ref_key]:-}" == "1" ]]; then
         continue
       fi
       seen_refs[$ref_key]=1
+      repo_shas[$owner_repo]+="  $sha"
 
       echo "  Found: ${ref_key} (in ${file})"
     fi
@@ -72,20 +68,17 @@ if [[ ${#seen_refs[@]} -eq 0 ]]; then
 fi
 
 echo ""
-echo "Validating ${#seen_refs[@]} unique action reference(s)..."
+echo "Validating ${#seen_refs[@]} unique action reference(s) across ${#repo_shas[@]} repository/repositories..."
 
-# --- Validate each SHA against its repository ---
+# --- Validate each SHA against its repository (clone each repo only once) ---
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-for ref_key in "${!seen_refs[@]}"; do
-  owner_repo="${ref_key%%@*}"
-  sha="${ref_key##*@}"
-
+for owner_repo in "${!repo_shas[@]}"; do
   echo ""
-  echo "Checking ${owner_repo}@${sha} ..."
+  echo "Cloning ${owner_repo} ..."
 
-  clone_dir="${tmpdir}/${owner_repo//\//_}_${sha:0:8}"
+  clone_dir="${tmpdir}/${owner_repo//\//_}"
   repo_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${owner_repo}.git"
 
   # Shallow clone is not sufficient for branch --contains, so we do a
@@ -95,13 +88,17 @@ for ref_key in "${!seen_refs[@]}"; do
     continue
   fi
 
-  # Check if any remote branch contains the commit
-  if git -C "$clone_dir" branch -r --contains "$sha" &>/dev/null; then
-    echo "  OK: SHA ${sha} is present in ${owner_repo}"
-  else
-    echo "  INVALID: SHA ${sha} is NOT contained in any branch of ${owner_repo}"
-    invalid_refs+=("${ref_key}")
-  fi
+  # Check all SHAs for this repository against the single clone
+  read -ra shas <<< "${repo_shas[$owner_repo]}"
+  for sha in "${shas[@]}"; do
+    echo "  Checking ${owner_repo}@${sha} ..."
+    if git -C "$clone_dir" branch -r --contains "$sha" &>/dev/null; then
+      echo "  OK: SHA ${sha} is present in ${owner_repo}"
+    else
+      echo "  INVALID: SHA ${sha} is NOT contained in any branch of ${owner_repo}"
+      invalid_refs+=("${owner_repo}@${sha}")
+    fi
+  done
 
   # Clean up clone immediately to save disk
   rm -rf "$clone_dir"
