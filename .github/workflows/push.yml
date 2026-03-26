@@ -9,4 +9,4 @@ jobs:
           persist-credentials: false
       - uses: ./
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v6.0.2
-      - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0 # v6.0.2 (invalid)
+      - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0 # v6.0.2 (invalid) 
