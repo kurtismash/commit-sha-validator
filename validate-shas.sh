@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+
 # --- Configuration ---
 WORKFLOW_DIR="${WORKFLOW_DIR:-.github/workflows}"
 EXTRA_DIRS="${EXTRA_DIRS:-}"
